@@ -22,13 +22,13 @@ import requests
 import lxml.html
 from lxml.html.soupparser import fromstring
 
-import unicodecsv
+import csv
 
 empty_filelist = u'<div style="background:#FFFFFF none repeat scroll 0%clear:left;margin:0;min-height:0px;padding:0;width:100%;">\n<table style="border:0pt none;width:100%;font-family:verdana,Arial,Helvetica,sans-serif;font-size:11px;">\n</table>\n</div>\n'
 
 def get_filelist(torrent_id, protocol):
     print "Getting filelist:",
-    r = requests.get(protocol + "://thepiratebay.se/ajax_details_filelist.php?id=" + str(torrent_id), headers={'user-agent': 'Archiving The Pirate Bay!'})
+    r = requests.get(protocol + "://thepiratebay.sx/ajax_details_filelist.php?id=" + str(torrent_id), headers={'user-agent': 'Archiving The Pirate Bay!'})
     if (r.status_code == 200):
         if (unicode(r.content.decode('ISO-8859-1')) == empty_filelist):
             print str(r.status_code) + ", but no filelist"
@@ -54,14 +54,14 @@ def get_filelist(torrent_id, protocol):
 
         filelist_csv = open(path + "/filelist.csv", 'w')
         filelist_csv.write(u'\ufeff'.encode('utf-8')) # BOM
-        csv_writer = unicodecsv.writer(filelist_csv, encoding='utf-8')
+        csv_writer = csv.writer(filelist_csv)
         csv_writer.writerow(['Filename','Size','Unit'])
-        html = fromstring(r.content.decode('ISO-8859-1').replace('</td><td align="right">',u'\xa0'))
+        html = fromstring(unicode(r.content, 'utf-8').replace('</td><td align="right">',u'\xa0'))
         filetable = [fileentry.split(u'\xa0') for fileentry in html.xpath('div/table')[0].text_content().split('\n')[1:-1]]
         for entry in filetable:
             entry[-1] = entry[-1][0]
         for entry in filetable:
-            csv_writer.writerow([column.encode('utf-8', 'replace') for column in entry])
+            csv_writer.writerow([column.encode('utf-8') for column in entry])
     else:
         print r.status_code
 

@@ -20,34 +20,19 @@ import os
 
 import requests
 import lxml.html
-from lxml.html.soupparser import fromstring
-from lxml.html import tostring
-
+import csv
 
 from datetime import datetime
-import unicodecsv
-
-from BeautifulSoup import UnicodeDammit
-
-def decode_html(html_string):
-    converted = UnicodeDammit(html_string, isHTML=True)
-    if not converted.unicode:
-        raise UnicodeDecodeError(
-            "Failed to detect encoding, tried [%s]",
-            ', '.join(converted.triedEncodings))
-    # print converted.originalEncoding
-    return converted.unicode
-
 
 def get_torrent_page(torrent_id, protocol):
-    r = requests.get(protocol + "://thepiratebay.se/torrent/" + str(torrent_id))
+    r = requests.get(protocol + "://thepiratebay.sx/torrent/" + str(torrent_id))
     print "Getting torrent page:",
     print r.status_code
 
     if (r.status_code != 200):
         return r.status_code
 
-    html = fromstring(decode_html(r.content))
+    html = lxml.html.fromstring(unicode(r.content, 'utf-8'))
 
     first_level  = str(int(torrent_id) / 1000000) + "xxxxxx/"
     second_level = str(int(torrent_id) / 100000) + "xxxxx/"
@@ -66,7 +51,7 @@ def get_torrent_page(torrent_id, protocol):
 
     path = "data/" + first_level + second_level + third_level + str(torrent_id)
     try:
-        title = unicode(html.xpath('//div[@id="detailsframe"]/div[@id="title"]')[0].text[3:-1])
+        title = unicode(html.xpath('//div[@id="detailsframe"]/div[@id="title"]')[0].text).strip()
     except IndexError:
         open("logs/" + str(int(torrent_id) / 100000) + "xxxxx/" + "download.log", 'a').write(datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ") + ' ' + str(torrent_id) + " " + str('BAD') + '\n')
     details = html.xpath('//div[@id="details"]')[0]
@@ -77,115 +62,61 @@ def get_torrent_page(torrent_id, protocol):
     else:
         picture = ''
 
-#    column1 = fromstring(tostring(details.xpath('dl[@class="col1"]')[0]).replace('<br>', ''))[0]
     column1 = details.xpath('dl[@class="col1"]')[0]
     column1_tags = zip(column1.findall('dt'), column1.findall('dd'))
+    column2_tags = []
     if not one_column:
-#        column2 = fromstring(tostring(details.xpath('dl[@class="col2"]')[0]).replace('<br>', ''))[0]
         column2 = details.xpath('dl[@class="col2"]')[0]
         column2_tags = zip(column2.findall('dt'), column2.findall('dd'))
 
-    category = column1_tags[0][1][0].get('href')[-3:]
+    imdb = ''
+    spoken = ''
+    texted = ''
+    tags = ''
+    for detail in column1_tags + column2_tags:
+        if detail[0].text == 'Type:':
+            category = detail[1].xpath('a')[0].get('href')[-3:] # href="/browse/000" -> "000"
+        if detail[0].text == 'Files:':
+            num_files = detail[1].text_content()
+        if detail[0].text == 'Size:':
+            size = detail[1].text_content().replace(u'\xa0', ' ')
+        if detail[0].text == 'Uploaded:':
+            iso_timestamp = datetime.strptime(detail[1].text_content(), "%Y-%m-%d %H:%M:%S GMT").isoformat() + "Z"
+        if detail[0].text == 'By:':
+            username = detail[1].text_content().strip()
+            if detail[1].xpath('img') != []:
+                usertype = '[' + detail[1].xpath('img')[0].get('title')[0] + ']'
+            else:
+                usertype = ''
+        if detail[0].text == 'Seeders:':
+            seeders = detail[1].text_content()
+        if detail[0].text == 'Leechers:':
+            leechers = detail[1].text_content()
 
-    size = column1_tags[2][1].text.replace(u'\xa0', ' ')
-
-    num_files = int(column1_tags[1][1][0].text)
-
-    offset = 0
-    has_imdb = False
-    has_spoken = False
-    has_texted = False
-    has_tags = False
-
-    try:
-        if column1_tags[3+offset][0].text == 'Info:':
-            imdb = column1_tags[3+offset][1][0].get('href')
-            offset += 1
-            has_imdb = True
-        else:
-            imdb = ''
-    except IndexError:
-        imdb = ''
-
-    try:
-        if column1_tags[3+offset][0].text == 'Spoken language(s):':
-            spoken = column1_tags[3+offset][1].text
-            offset += 1
-            has_spoken = True
-        else:
-            spoken = ''
-    except IndexError:
-        spoken = ''
-
-    try:
-        if column1_tags[3+offset][0].text == 'Texted language(s):':
-            texted = column1_tags[3+offset][1].text
-            offset += 1
-            has_texted = True
-        else:
-            texted = ''
-    except IndexError:
-        texted = ''
-
-    try:
-        tags = [tag.text for tag in column1_tags[3+offset][1]]
-        tag_string = u','.join([u'"' + unicode(tag)+ u'"' for tag in tags])
-        if tag_string != '':
-            offset += 1
-            has_tags = True
-    except IndexError:
-        tag_string = u''
-
-#    print 'Has Picture:', one_column
-#    print 'Has IMDB:   ', has_imdb#, '(' + offset + ')'
-#    print 'Has Spoken: ', has_spoken#, '(' + offset + ')'
-#    print 'Has Texted: ', has_texted#, '(' + offset + ')'
-#    print 'Has Tags:   ', has_tags#, '(' + offset + ')'
-
-    if one_column:
-        rating_str = column1.xpath('dd[@id="rating"]')[0].text[3:-2]
-        timestamp = column1_tags[4+offset][1].text
-        username = column1_tags[5+offset][1][0].text # Syntax: [row][column (title or data)][0 (for selecting user <a> tag)]
-        if len(column1_tags[5+offset][1]) == 2:
-            usertype = '[' + column1_tags[5+offset][1][1].get('title')[0] + ']'
-        else:
-            usertype = ''
-        seeders = int(column1_tags[6+offset][1].text)
-        leechers = int(column1_tags[7+offset][1].text)
-    else:
-        rating_str = column2.xpath('dd[@id="rating"]')[0].text[3:-2]
-        timestamp = column2_tags[1][1].text
-        username = column2_tags[2][1][0].text
-        if len(column2_tags[2][1]) == 2:
-            usertype = '[' + column2_tags[2][1][1].get('title')[0] + ']'
-        else:
-            usertype = ''
-        seeders = int(column2_tags[3][1].text)
-        leechers = int(column2_tags[4][1].text)
-
-    rating_pieces = rating_str.split(' ')
-    rating_positive = abs(int(rating_pieces[0]))
-    rating_negative = abs(int(rating_pieces[2]))
-    del rating_pieces
-
-    iso_timestamp = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S GMT").isoformat() + "Z"
+        if detail[0].text == 'Info:':
+            imdb = detail[1].xpath('a')[0].get('href')
+        if detail[0].text == 'Spoken language(s):':
+            spoken = detail[1].text_content().strip()
+        if detail[0].text == 'Texted language(s):':
+            texted = detail[1].text_content().strip()
+        if detail[0].text == 'Tag(s):':
+            tags = u','.join([u'"' + unicode(tag.text)+ u'"' for tag in detail[1]])
 
     btih = details.xpath('div[@class="download"]/a')[0].get('href')[20:60].upper()
 
-    description = unicode(details.xpath('div[@class="nfo"]/pre')[0].text_content()[:-2])    
+    description = unicode(details.xpath('div[@class="nfo"]/pre')[0].text_content()[:-2]) # [:-2] to remove '\t\t' from the end
 
-    open(path + "/description.txt", 'w').write(description.encode('utf-8', 'replace'))
+    open(path + "/description.txt", 'w').write(description.encode('utf-8'))
     details_csv = open(path + "/details.csv", 'w')
     details_csv.write(u'\ufeff'.encode('utf-8')) # BOM
-    csv_writer = unicodecsv.writer(details_csv, encoding='utf-8')
+    csv_writer = csv.writer(details_csv)
+
+    # Rating have been removed
+    rating_positive = ''
+    rating_negative = ''
 
     csv_writer.writerow(['Title', 'Type', 'Files', 'Size', 'IMDB', 'Spoken Languages', 'Texted Languages', 'Tags', 'Quality (+)', 'Quality (-)', 'Uploaded', 'By', 'User Type', 'Seeders', 'Leechers', 'Info Hash', 'Picture', 'Capture Date'])
-
-    cleaned_up_data = []
-    for element in [title,category,num_files,size,imdb,spoken,texted,tag_string,rating_positive,rating_negative,iso_timestamp,username,usertype,seeders,leechers,btih,picture,datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")]:
-        cleaned_up_data.append(unicode(element).encode('utf-8', 'replace'))
-
-    csv_writer.writerow(cleaned_up_data)
+    csv_writer.writerow([element.encode('utf-8') for element in [title,category,unicode(num_files),size,imdb,spoken,texted,tags,rating_positive,rating_negative,iso_timestamp,username,usertype,seeders,leechers,btih,picture,datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")]])
     return 200
 
 if __name__ == '__main__':

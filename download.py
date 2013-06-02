@@ -18,15 +18,11 @@
 import sys
 import os
 import HTMLParser
+
 import torrent_page
-import torrent_page_old
-import torrent_page_bs
 import filelist
-import filelist_old
-import filelist_bs
 import comments
-import comments_old
-import comments_bs
+
 import requests
 import datetime
 
@@ -40,38 +36,10 @@ def main():
 
     while True:
         try:
-            try:
-                tp_status_code = torrent_page.get_torrent_page(torrent_id, protocol)
-
-            except IndexError:
-                print "Falling back to BeautifulSoup for torrent page:"
-                tp_status_code = torrent_page_bs.get_torrent_page(torrent_id, protocol)
+            tp_status_code = torrent_page.get_torrent_page(torrent_id, protocol)
             if (tp_status_code == 200):
-                try:
-                    filelist.get_filelist(torrent_id, protocol)
-                except ValueError:
-                    print "Falling back to BeautifulSoup for filelist:"
-                    filelist_bs.get_filelist(torrent_id, protocol)
-                try:
-                    comments.get_comments(torrent_id, protocol)
-                except ValueError:
-                    print "Falling back to BeautifulSoup for comments:"
-                    comments_bs.get_comments(torrent_id, protocol)
-
-            except ValueError:
-                print "Falling back to BeautifulSoup for torrent page:"
-                tp_status_code = torrent_page_old.get_torrent_page(torrent_id, protocol)
-            if (tp_status_code == 200):
-                try:
-                    filelist.get_filelist(torrent_id, protocol)
-                except ValueError:
-                    print "Falling back to BeautifulSoup for filelist:"
-                    filelist_old.get_filelist(torrent_id, protocol)
-                try:
-                    comments.get_comments(torrent_id, protocol)
-                except ValueError:
-                    print "Falling back to BeautifulSoup for comments:"
-                    comments_old.get_comments(torrent_id, protocol)
+                filelist.get_filelist(torrent_id, protocol)
+                comments.get_comments(torrent_id, protocol)
             elif (tp_status_code == 404):
                 print "Skipping filelist..."
                 print "Skipping comments..."
@@ -90,11 +58,7 @@ def main():
             tp_status_code = torrent_page.get_torrent_page(torrent_id, protocol)
             if (tp_status_code == 200):
                 filelist.get_filelist(torrent_id, protocol)
-                try:
-                    comments.get_comments(torrent_id, protocol)
-                except ValueError:
-                    print "Falling back to BeautifulSoup for comments:"
-                    comments_old.get_comments(torrent_id, protocol)
+                comments.get_comments(torrent_id, protocol)
             else:
                 print "Skipping filelist..."
                 print "Skipping comments..."
@@ -108,11 +72,7 @@ def main():
             tp_status_code = torrent_page.get_torrent_page(torrent_id, protocol)
             if (tp_status_code == 200):
                 filelist.get_filelist(torrent_id, protocol)
-                try:
-                    comments.get_comments(torrent_id, protocol)
-                except ValueError:
-                    print "Falling back to BeautifulSoup for comments:"
-                    comments_old.get_comments(torrent_id, protocol)
+                comments.get_comments(torrent_id, protocol)
             else:
                 print "Skipping filelist..."
                 print "Skipping comments..."
@@ -142,19 +102,16 @@ if (len(sys.argv) == 2+offset):
     torrent_id = sys.argv[1+offset]
     print torrent_id
     main()
-    print str(float(100000 - (torrent_id % 100000) ) / 1000.0) + "%"
     
 elif (len(sys.argv) == 3+offset):
     if (int(sys.argv[1+offset]) > (int(sys.argv[2+offset])+1)):
         for torrent_id in range(int(sys.argv[1+offset]),int(sys.argv[2+offset])-1, -1):
             print torrent_id
             main()
-            print str(float(100000 - (torrent_id % 100000) ) / 1000.0) + "%"
     else:
         for torrent_id in range(int(sys.argv[1+offset]),int(sys.argv[2+offset])+1):
             print torrent_id
             main()
-            print str(float(100000 - (torrent_id % 100000) ) / 1000.0) + "%"
             
 elif (len(sys.argv) > 3 and not https):
     print "ERROR: Too many arguments"

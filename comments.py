@@ -8,22 +8,11 @@ import lxml.html
 from lxml.html.soupparser import fromstring
 
 from datetime import datetime
-import unicodecsv
-
-from BeautifulSoup import UnicodeDammit
-
-def decode_html(html_string):
-    converted = UnicodeDammit(html_string, isHTML=True)
-    if not converted.unicode:
-        raise UnicodeDecodeError(
-            "Failed to detect encoding, tried [%s]",
-            ', '.join(converted.triedEncodings))
-    # print converted.originalEncoding
-    return converted.unicode
+import csv
 
 def get_comments(torrent_id, protocol):
     print "Getting comments:",
-    r = requests.get(protocol + "://thepiratebay.se/ajax_details_comments.php?id=" + str(torrent_id), headers={'user-agent': 'Archiving The Pirate Bay!'})
+    r = requests.get(protocol + "://thepiratebay.sx/ajax_details_comments.php?id=" + str(torrent_id), headers={'user-agent': 'Archiving The Pirate Bay!'})
     if (r.status_code == 200):
         if (r.content == ''):
             print str(r.status_code) + ", but no comments"
@@ -50,10 +39,10 @@ def get_comments(torrent_id, protocol):
 
     comments_csv = open(path + "/comments.csv", 'w')
     comments_csv.write(u'\ufeff'.encode('utf-8')) # BOM
-    csv_writer = unicodecsv.writer(comments_csv, encoding='utf-8')
+    csv_writer = csv.writer(comments_csv)
     csv_writer.writerow(['User Type', 'Username', 'Date', 'Text'])
 
-    root = fromstring(decode_html(r.content))
+    root = fromstring(unicode(r.content, 'utf-8'))
 
     comment_array = root.xpath('.//div[starts-with(@id, "comment-")]')
 
@@ -66,14 +55,11 @@ def get_comments(torrent_id, protocol):
         try:
             username = comment.find('p/a').get('title')[7:]
             timestamp = comment.find('p').text_content()[-22:-6]
-            text = unicode(comment.find('div[@class="comment"]').text_content()[1:-1]).replace(u'\xa0', ' ')
+            text = unicode(comment.find('div[@class="comment"]').text_content())[1:-1].replace(u'\xa0', ' ')
             
             comment_date = datetime.strptime(timestamp, "%Y-%m-%d %H:%M")
 
-            cleaned_up_data = []
-            for i in [usertype, username, comment_date.isoformat()[:-3] + "Z", text]:
-                cleaned_up_data.append(i.encode('utf-8', 'replace'))
-            csv_writer.writerow(cleaned_up_data)
+            csv_writer.writerow([entry.encode('utf-8') for entry in [usertype, username, comment_date.isoformat()[:-3] + "Z", text]])
         except AttributeError:
             pass
 
